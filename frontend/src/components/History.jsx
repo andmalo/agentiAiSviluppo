@@ -7,7 +7,11 @@ function HistoryItem({ item }) {
 
   return (
     <li className="history-item">
-      <img src={item.photo_url} alt={`${item.brand} ${item.category}`} />
+      {item.photo_url ? (
+        <img src={item.photo_url} alt={`${item.brand} ${item.category}`} />
+      ) : (
+        <div className="history-item__placeholder" aria-hidden="true" />
+      )}
       <div className="history-item__info">
         <p className="history-item__title">
           {item.brand} · {item.category}

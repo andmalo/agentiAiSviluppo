@@ -208,12 +208,17 @@ h1 {
   padding: 10px;
 }
 
-.history-item img {
+.history-item img,
+.history-item__placeholder {
   width: 56px;
   height: 56px;
   object-fit: cover;
   border-radius: 8px;
   flex-shrink: 0;
+}
+
+.history-item__placeholder {
+  background: var(--border);
 }
 
 .history-item__info {

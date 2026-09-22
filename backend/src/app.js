@@ -1,8 +1,26 @@
 import http from 'node:http';
 import { evaluateClothing } from './services/pricingService.js';
 import { saveEvaluation, listEvaluations } from './services/supabaseService.js';
+import { decodeAndValidateImage } from './utils/imageValidation.js';
+import { checkRateLimit } from './utils/rateLimit.js';
 
 const MAX_BODY_BYTES = 12 * 1024 * 1024;
+const MAX_BRAND_LENGTH = 60;
+
+const CATEGORIES = [
+  'Maglieria',
+  'Camicie',
+  'T-shirt',
+  'Pantaloni',
+  'Jeans',
+  'Gonne',
+  'Abiti',
+  'Giacche e cappotti',
+  'Felpe',
+  'Scarpe',
+  'Borse',
+  'Accessori'
+];
 
 function setCorsHeaders(res) {
   res.setHeader('Access-Control-Allow-Origin', process.env.FRONTEND_URL || '*');
@@ -37,6 +55,11 @@ function readBody(req) {
 }
 
 async function handleEvaluate(req, res) {
+  const rateLimitError = checkRateLimit(req);
+  if (rateLimitError) {
+    return sendJson(res, 429, { error: rateLimitError });
+  }
+
   let body;
 
   try {
@@ -50,15 +73,20 @@ async function handleEvaluate(req, res) {
 
   const { category, brand, condition, photo } = body;
 
+  // Rimuove newline/tab/altri caratteri di controllo: brand è testo libero
+  // inserito dall'utente e finisce dentro il prompt mandato al modello, non
+  // deve poter spezzare la struttura del messaggio su più righe.
+  const sanitizedBrand = typeof brand === 'string' ? brand.replace(/[\p{Cc}]+/gu, ' ').trim() : '';
+
   if (
     typeof category !== 'string' ||
-    !category.trim() ||
-    typeof brand !== 'string' ||
-    !brand.trim() ||
+    !CATEGORIES.includes(category) ||
+    !sanitizedBrand ||
+    sanitizedBrand.length > MAX_BRAND_LENGTH ||
     !['nuovo', 'buono', 'usato'].includes(condition)
   ) {
     return sendJson(res, 400, {
-      error: 'category, brand e condition sono obbligatori. condition deve essere nuovo, buono oppure usato.'
+      error: `category deve essere una categoria valida, brand non vuoto (max ${MAX_BRAND_LENGTH} caratteri), condition deve essere nuovo, buono oppure usato.`
     });
   }
 
@@ -73,11 +101,18 @@ async function handleEvaluate(req, res) {
     });
   }
 
-  const cleanedCategory = category.trim();
-  const cleanedBrand = brand.trim();
+  const rawPhotoData = photo.data.replace(/^data:[^;]+;base64,/, '');
+  const imageCheck = decodeAndValidateImage(rawPhotoData, photo.media_type);
+
+  if (!imageCheck.valid) {
+    return sendJson(res, 400, { error: imageCheck.reason });
+  }
+
+  const cleanedCategory = category;
+  const cleanedBrand = sanitizedBrand;
   const cleanedPhoto = {
     media_type: photo.media_type,
-    data: photo.data.replace(/^data:[^;]+;base64,/, '')
+    data: rawPhotoData
   };
 
   let result;

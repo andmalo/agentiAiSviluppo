@@ -31,10 +31,15 @@ Compila `backend/.env`:
 | `PRICING_MODEL` | no (default `gpt-4o`) | modello con vision |
 | `SUPABASE_URL` | sì | url del progetto Supabase |
 | `SUPABASE_SERVICE_KEY` | sì | service role key, solo lato server |
-| `SUPABASE_BUCKET` | no (default `photos`) | bucket Storage per le foto |
+| `SUPABASE_BUCKET` | no (default `photos`) | bucket Storage per le foto (privato) |
 | `FRONTEND_URL` | no (default `*`) | origine ammessa in CORS, es. `http://localhost:5173` |
+| `RATE_LIMIT_MAX_PER_IP` | no (default 5) | richieste max per IP ogni 10 minuti su `/evaluate` |
+| `DAILY_EVALUATION_LIMIT` | no (default 100) | tetto giornaliero globale di valutazioni |
 
-Setup Supabase (tabella + bucket): vedi [backend/README.md](backend/README.md).
+Il server rifiuta di partire se mancano `PRICING_API_KEY`, `SUPABASE_URL` o
+`SUPABASE_SERVICE_KEY`.
+
+Setup Supabase (tabella + bucket privato): vedi [backend/README.md](backend/README.md).
 
 Il backend non ha dipendenze npm da installare: nessun `node_modules`, parte
 subito con `npm run dev`.
@@ -91,6 +96,8 @@ dei due url serve per configurare l'altro):
    | `SUPABASE_SERVICE_KEY` | service role key di Supabase |
    | `SUPABASE_BUCKET` | `photos` |
    | `FRONTEND_URL` | url del sito Netlify (aggiungila dopo il passo 2.2) |
+   | `RATE_LIMIT_MAX_PER_IP` | `5` (facoltativa, è già il default) |
+   | `DAILY_EVALUATION_LIMIT` | `100` (facoltativa, è già il default — abbassala se vuoi un tetto di spesa più stretto) |
 
    `PORT` non va impostata: la mette Render automaticamente e il codice la
    legge già da `process.env.PORT`.
@@ -124,6 +131,11 @@ Render sia stato ridistribuito dopo averlo impostato.
 - Le chiavi vere non vanno mai committate: restano solo nei `.env` locali
   (esclusi da Git) e nelle variabili d'ambiente di Render/Netlify.
 - Il salvataggio su Supabase avviene in background dopo aver risposto
-  all'utente: se fallisce, l'errore viene solo loggato lato backend.
+  all'utente, con retry automatici; se fallisce comunque resta una riga con
+  `status = 'failed'` per diagnosi.
+- Il bucket delle foto è privato: gli url nello storico sono firmati e
+  scadono dopo un'ora.
+- `/evaluate` ha un rate limit per IP e un tetto giornaliero di chiamate al
+  modello, per non esporsi a bollette impreviste in caso di abuso.
 - Dettagli su schema tabella, bucket e formato risposta del modello:
   [backend/README.md](backend/README.md).
